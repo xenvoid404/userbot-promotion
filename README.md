@@ -128,15 +128,16 @@ Saat pertama kali berjalan, `api_secret` masih `changeme` — semua request diiz
 ### Langkah 1 — Set kredensial Telegram
 
 ```bash
-BASE="http://localhost:8080"
-
-curl -X PUT $BASE/config -H "Content-Type: application/json" \
+curl -X PUT http://localhost:8080/config \
+  -H "Content-Type: application/json" \
   -d '{"key": "api_id", "value": "123456"}'
 
-curl -X PUT $BASE/config \
+curl -X PUT http://localhost:8080/config \
+  -H "Content-Type: application/json" \
   -d '{"key": "api_hash", "value": "abcdef1234567890abcdef1234567890"}'
 
-curl -X PUT $BASE/config \
+curl -X PUT http://localhost:8080/config \
+  -H "Content-Type: application/json" \
   -d '{"key": "phone_number", "value": "+628123456789"}'
 ```
 
@@ -154,7 +155,8 @@ di terminal. Masukkan kode dari Telegram — sesi disimpan otomatis ke `session.
 ### Langkah 3 — Amankan API secret
 
 ```bash
-curl -X PUT $BASE/config \
+curl -X PUT http://localhost:8080/config \
+  -H "Content-Type: application/json" \
   -d '{"key": "api_secret", "value": "ganti-dengan-secret-kuat-kamu"}'
 ```
 
@@ -166,14 +168,16 @@ Authorization: Bearer ganti-dengan-secret-kuat-kamu
 ### Langkah 4 — Tambah grup dan pesan
 
 ```bash
-AUTH="Authorization: Bearer ganti-dengan-secret-kuat-kamu"
-
 # Whitelist grup
-curl -X POST $BASE/groups -H "$AUTH" -H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/groups \
+  -H "Authorization: Bearer ganti-dengan-secret-kuat-kamu" \
+  -H "Content-Type: application/json" \
   -d '{"group_id": -1001234567890, "label": "Komunitas Dev", "limit_24h": 3}'
 
 # Buat pesan promosi
-curl -X POST $BASE/messages -H "$AUTH" -H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/messages \
+  -H "Authorization: Bearer ganti-dengan-secret-kuat-kamu" \
+  -H "Content-Type: application/json" \
   -d '{
     "name": "Promo Produk A",
     "text": "🔥 *Promo spesial!*\n\nDapatkan diskon 30% hari ini.",
