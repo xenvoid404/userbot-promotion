@@ -1,0 +1,50 @@
+[Unit]
+Description=Telegram Userbot Promotion
+Documentation=https://github.com/xenvoid404/userbot-promotion
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# ── Jalankan sebagai user non-root ──────────────────────────────────────────
+# Buat user khusus sebelum install: useradd -r -s /bin/false userbot
+# JANGAN gunakan User=root di production.
+User=userbot
+Group=userbot
+
+WorkingDirectory=/opt/userbot-promotion
+ExecStart=/usr/local/bin/userbot-promotion
+
+# ── Restart policy ──────────────────────────────────────────────────────────
+Restart=on-failure
+RestartSec=10s
+# Maksimal 5 restart dalam 2 menit; setelah itu systemd berhenti mencoba.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+# ── Environment ─────────────────────────────────────────────────────────────
+# Overrides default value di binary. Sesuaikan path sesuai server kamu.
+Environment=DB_PATH=/opt/userbot-promotion/sqlite.db
+Environment=SESSION_FILE=/opt/userbot-promotion/session.json
+
+# ── Logging ke journald ─────────────────────────────────────────────────────
+# Lihat log: journalctl -u userbot-promotion -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=userbot-promotion
+
+# ── Hardening (security) ─────────────────────────────────────────────────────
+# Cegah eskalasi privilege.
+NoNewPrivileges=true
+# Berikan /tmp dan /var/tmp yang terisolasi.
+PrivateTmp=true
+# Proteksi filesystem: hanya baca kecuali direktori kerja.
+ProtectSystem=strict
+# Izinkan akses baca/tulis hanya ke direktori data aplikasi.
+ReadWritePaths=/opt/userbot-promotion
+# Sembunyikan /home user lain.
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
