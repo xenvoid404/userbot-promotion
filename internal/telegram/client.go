@@ -4,6 +4,8 @@ package telegram
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -12,7 +14,6 @@ import (
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
-	"github.com/gotd/td/telegram/message"
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"go.uber.org/zap"
@@ -170,21 +171,12 @@ func (c *Client) SendMessage(
 ) error {
 	target := c.resolvePeer(groupID)
 
-	// Menggunakan message.Sender dari gotd.
-	// Mengapa kita menggunakan builder ini:
-	// 1. Otomatis mengurus pembuatan RandomID yang thread-safe menggunakan crypto/rand (OS entropy),
-	//    sehingga kita tidak perlu membuat fungsi PRNG manual yang rawan data race atau duplikasi.
-	// 2. Sangat mudah menangani balasan (Reply) untuk sistem Topik/Thread.
-	sender := message.NewSender(c.raw)
-
-	var builder *message.RequestBuilder
-	if topicID > 0 {
-		builder = sender.To(target).ReplyMsgID(int(topicID))
-	} else {
-		builder = sender.To(target)
+	// Generate RandomID menggunakan crypto/rand (thread-safe, anti-duplikat)
+	id, err := cryptoRandID()
+	if err != nil {
+		return fmt.Errorf("generate random id: %w", err)
 	}
 
-	var err error
 	if mediaPath != "" {
 		// Menggunakan package uploader bawaan resmi dari gotd
 		u := uploader.NewUploader(c.raw)
@@ -204,13 +196,30 @@ func (c *Client) SendMessage(
 			return fmt.Errorf("upload media: %w", errUpload)
 		}
 
-		// Kirim media yang sudah diupload beserta caption-nya
-		_, err = builder.Media(ctx, message.UploadedDocument(uploaded).Caption(text))
-	} else {
-		// Kirim pesan teks biasa
-		_, err = builder.Text(ctx, text)
+		// Raw API untuk mengirim Media + Caption
+		req := &tg.MessagesSendMediaRequest{
+			Peer:     target,
+			Media:    &tg.InputMediaUploadedDocument{File: uploaded},
+			Message:  text,
+			RandomID: id,
+		}
+		if topicID > 0 {
+			req.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: int(topicID)}
+		}
+		_, err = c.raw.MessagesSendMedia(ctx, req)
+		return wrapTGError(err)
 	}
 
+	// Raw API untuk mengirim Teks biasa
+	req := &tg.MessagesSendMessageRequest{
+		Peer:     target,
+		Message:  text,
+		RandomID: id,
+	}
+	if topicID > 0 {
+		req.ReplyTo = &tg.InputReplyToMessage{ReplyToMsgID: int(topicID)}
+	}
+	_, err = c.raw.MessagesSendMessage(ctx, req)
 	return wrapTGError(err)
 }
 
@@ -270,4 +279,18 @@ func wrapTGError(err error) error {
 	}
 	// Gagal parse angka — pakai estimasi aman 60 detik
 	return &FloodWaitError{Seconds: 60}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Crypto helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+// cryptoRandID menghasilkan random ID 64-bit menggunakan crypto/rand (OS entropy).
+// Dijamin thread-safe dan mencegah Telegram menolak pesan karena RandomID duplikat.
+func cryptoRandID() (int64, error) {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return 0, fmt.Errorf("crypto/rand: %w", err)
+	}
+	return int64(binary.LittleEndian.Uint64(b[:])), nil
 }
